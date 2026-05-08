@@ -16,16 +16,16 @@ def extract_data(html):
 
     text = soup.get_text()
     type_match = re.search(r"Type Code:\s*([A-Z0-9]+)", text)
-    type_code = type_match.group(1) if type_match else "NOT_FOUND"
+    type_code = type_match.group(1) if type_match else "NaN "
     
-    series = "NOT_FOUND"
+    series = "NaN"
     series_select = soup.find("select", {"name": "series"})
     if series_select:
         selected_series = series_select.find("option", selected=True)
         if selected_series:
             series = selected_series.text.strip()
 
-    prod_month = "NOT_FOUND"
+    prod_month = "NaN"
     prod_select = soup.find("select", {"name": "prod"})
     if prod_select:
         selected_month = prod_select.find("option", selected=True)
@@ -53,35 +53,33 @@ def main(vin_prefix, vin_start, vin_end, step, target_list):
     vin_dict = {}
     serials = generate_serials(vin_prefix, vin_start, vin_end, step)
 
-    print(f"--- Scraping started. Estimated time: {str(timedelta(seconds=(vin_end-vin_start)/step*4.5)).split('.')[0]}")
+    print(f"--- Scraping started. Estimated time: {str(timedelta(seconds=(vin_end-vin_start)/step*4)).split('.')[0]} ---")
 
     for serial in serials:
-        #print(f"Checking {serial}")
-
         try:
             type_code, series, prod_month = get_data(serial)
             vin_dict[serial] = (type_code, series, prod_month)
-            print(f"{serial} -> {type_code}, {series:12}, {prod_month}")
+            print(f"{serial} -> {type_code},  {series:17},  {prod_month}{'   [HIT]' if any(t in series for t in target_list) else ''}")
         except Exception as e:
-            vin_dict[serial] = ("ERROR", "ERROR")
+            vin_dict[serial] = ("ERR ", "ERR", "ERR")
             print("Error:", e)
 
-        time.sleep(random.uniform(3.0, 6.0))
+        time.sleep(random.uniform(3.0, 5.0))
 
-    OUTPUT_FILE = f"{vin_prefix}{vin_start} - {vin_prefix}{vin_end}.txt"
+    OUTPUT_FILE = f"{vin_dict[next(iter(vin_dict))][0]} - {vin_prefix}{str(vin_start).zfill(5)} - {vin_prefix}{str(vin_end).zfill(5)}.txt" if step == 1 else f"{vin_prefix}{str(vin_start).zfill(5)} - {vin_prefix}{str(vin_end).zfill(5)}.txt"
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for serial, (type_code, series, prod_month) in vin_dict.items():
-            f.write(f"{serial} - {type_code} - {series:12} - {prod_month}\n")
+            f.write(f"{serial} - {type_code} - {series:17} - {prod_month}{'   [HIT]' if any(t in series for t in target_list) else ''}\n")
 
     print(f"\n===DONE===\nSaved VINs to {OUTPUT_FILE}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Fetch Type Codes and Production Month from RealOEM for a specified VIN range.")
+    parser = argparse.ArgumentParser(description="Fetch Type Codes, Series and Production Month from RealOEM for a specified VIN range.")
     parser.add_argument("prefix", type=str, help="VIN7 prefix, e.g., CC")
     parser.add_argument("start", type=int, help="VIN7 start range, e.g., 78000")
     parser.add_argument("end", type=int, help="VIN7 end range, e.g., 78345")
-    parser.add_argument("--step", type=int, default=1, help="Step size (default 1, for precision recording, increase for exploratory use)")
+    parser.add_argument("--step", type=int, default=1, help="Step size (default 1 for precision recording, increase for exploratory use)")
     parser.add_argument("--targets", nargs="+", help="Model types to listen for (e.g. F06 F12 F13)")
 
     args = parser.parse_args()
